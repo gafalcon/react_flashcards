@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Card } from "../models/Card";
 import { getRandomInt } from "../utils/fns";
 import { useKeyDown } from "../utils/useKeyDown";
@@ -12,45 +12,52 @@ type Action = "correct" | "incorrect" | "skip" | "show";
 
 export const Stack = ({ cards }: StackProps) => {
   const [numReviews, setNumReviews] = useState<number>(5);
-  const [incompleteCards, setIncompleteCards] = useState<Card[]>([]);
-  const [numCardsToReview, setNumCardsToReview] = useState<number>(0);
-  const [cardsToReview, setCardsToReview] = useState<Card[]>([]);
-  const [currentCardIndex, setCurrentCardIndex] = useState<number | null>(null);
+  const [numCardsToReview, setNumCardsToReview] = useState<number>(
+    cards.length
+  );
+
+  const [currentCardIndex, setCurrentCardIndex] = useState<number | null>(
+    cards.length ? getRandomInt(cards.length) : null
+  );
   const [showAnswer, setShowAnswer] = useState(false);
 
-  useEffect(() => {
-    if (cards?.length) {
-      const incompleteCards = cards.filter(
-        (card) => card.correct_attempts < numReviews
-      );
-      setIncompleteCards(incompleteCards);
-    }
-  }, [cards]);
+  const getIncompleteCards = () =>
+    cards.filter((card) => card.correct_attempts < numReviews);
 
-  useEffect(() => {
-    if (
-      numCardsToReview &&
-      incompleteCards.length &&
-      incompleteCards.length !== numCardsToReview
-    ) {
-      const numbers = Array(incompleteCards.length)
-        .fill(0)
-        .map((_, index) => index + 1);
-      numbers.sort(() => Math.random() - 0.5);
-      setCardsToReview(
-        numbers.slice(0, numCardsToReview).map((i) => incompleteCards[i])
-      );
+  const getCardsToReview = (incompleteCards: Card[]) => {
+    const numbers = Array(incompleteCards.length)
+      .fill(0)
+      .map((_, index) => index + 1);
+    numbers.sort(() => Math.random() - 0.5);
+    return numbers.slice(0, numCardsToReview).map((i) => incompleteCards[i]);
+  };
+
+  const incompleteCards = useMemo(getIncompleteCards, [cards]);
+
+  const cardsToReview = useMemo(
+    () => getCardsToReview(incompleteCards),
+    [incompleteCards, numCardsToReview]
+  );
+
+  const updateNumCardsToReview: React.ChangeEventHandler<HTMLInputElement> = (
+    e
+  ) => {
+    if (e.target.value) {
+      setNumCardsToReview(parseInt(e.target.value));
+      setCurrentCardIndex(0);
     } else {
-      setCardsToReview(incompleteCards);
+      setNumCardsToReview(0);
+      setCurrentCardIndex(null);
     }
-  }, [incompleteCards, numCardsToReview]);
+  };
 
-  useEffect(() => {
-    if (cardsToReview.length) {
-      setCurrentCardIndex(getRandomInt(cardsToReview.length));
-      setNumCardsToReview(cardsToReview.length);
+  const updateNumReviews: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    if (e.target.value) {
+      setNumReviews(parseInt(e.target.value));
+    } else {
+      setNumReviews(0);
     }
-  }, [cardsToReview]);
+  };
 
   const handleKeyDown = (e: string) => {
     switch (e) {
@@ -89,10 +96,7 @@ export const Stack = ({ cards }: StackProps) => {
         const currentCard = cardsToReview[currentCardIndex!];
         currentCard.correct_attempts++;
         if (currentCard.correct_attempts === numReviews) {
-          const updated = cardsToReview
-            .slice(0, currentCardIndex!)
-            .concat(cardsToReview.slice(currentCardIndex! + 1));
-          setCardsToReview(updated);
+          setCurrentCardIndex(getRandomInt(cardsToReview.length - 1));
         } else {
           setCurrentCardIndex(getRandomInt(cardsToReview.length));
         }
@@ -125,9 +129,7 @@ export const Stack = ({ cards }: StackProps) => {
           name="numCards"
           type="number"
           value={numCardsToReview}
-          onChange={(e) =>
-            e.target.value ? setNumCardsToReview(parseInt(e.target.value)) : 0
-          }
+          onChange={updateNumCardsToReview}
         />
         <label
           htmlFor="numReviews"
@@ -140,9 +142,7 @@ export const Stack = ({ cards }: StackProps) => {
           className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
           type="number"
           value={numReviews}
-          onChange={(e) =>
-            e.target.value ? setNumReviews(parseInt(e.target.value)) : 0
-          }
+          onChange={updateNumReviews}
         />
       </section>
 
