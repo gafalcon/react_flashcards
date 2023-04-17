@@ -7,3 +7,12 @@ export const getCards = async (): Promise<Card[]> => {
   const data = await res.json();
   return data.data;
 };
+
+export const answerCard = async (cardId: string, isCorrect: boolean) => {
+  const res = await fetch(`${API_URL}/flashcards/${cardId}/answer`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_correct: isCorrect }),
+  });
+  const data = await res.json();
+  return data;
+};

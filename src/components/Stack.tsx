@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { Card } from "../models/Card";
+import { answerCard } from "../services/api";
 import { getRandomInt } from "../utils/fns";
 import { useKeyDown } from "../utils/useKeyDown";
 import Button from "./Button";
@@ -20,6 +21,7 @@ export const Stack = ({ cards }: StackProps) => {
     cards.length ? getRandomInt(cards.length) : null
   );
   const [showAnswer, setShowAnswer] = useState(false);
+  const [updateAnswer, setUpdateAnswer] = useState(false);
 
   const getIncompleteCards = () =>
     cards.filter((card) => card.correct_attempts < numReviews);
@@ -38,6 +40,9 @@ export const Stack = ({ cards }: StackProps) => {
     () => getCardsToReview(incompleteCards),
     [incompleteCards, numCardsToReview]
   );
+
+  const card =
+    currentCardIndex === null ? null : cardsToReview[currentCardIndex];
 
   const updateNumCardsToReview: React.ChangeEventHandler<HTMLInputElement> = (
     e
@@ -82,6 +87,14 @@ export const Stack = ({ cards }: StackProps) => {
     "ArrowUp",
     "ArrowRight",
   ]);
+
+  const updateAnswerInDB = (cardId: string, is_correct: boolean) => {
+    if (updateAnswer) {
+      answerCard(cardId, is_correct).then((res) => {
+        console.log({ resAnswer: res });
+      });
+    }
+  };
   const handleAction = (action: Action) => {
     if (action !== "show") setShowAnswer(false);
 
@@ -95,6 +108,7 @@ export const Stack = ({ cards }: StackProps) => {
       case "correct":
         const currentCard = cardsToReview[currentCardIndex!];
         currentCard.correct_attempts++;
+        updateAnswerInDB(currentCard.id, true);
         if (currentCard.correct_attempts === numReviews) {
           setCurrentCardIndex(getRandomInt(cardsToReview.length - 1));
         } else {
@@ -102,16 +116,15 @@ export const Stack = ({ cards }: StackProps) => {
         }
         break;
       case "incorrect":
-        cardsToReview[currentCardIndex!].incorrect_attempts++;
+        const curCard = cardsToReview[currentCardIndex!];
+        curCard.incorrect_attempts++;
+        updateAnswerInDB(curCard.id, false);
         setCurrentCardIndex(getRandomInt(cardsToReview.length));
         break;
       default:
         break;
     }
   };
-
-  const card =
-    currentCardIndex === null ? null : cardsToReview[currentCardIndex];
 
   return (
     <>
@@ -144,6 +157,16 @@ export const Stack = ({ cards }: StackProps) => {
           value={numReviews}
           onChange={updateNumReviews}
         />
+        <div>
+          <label htmlFor="updateAnswers">Update answers in db</label>
+          <input
+            className="ml-2"
+            name="updateAnswer"
+            type="checkbox"
+            checked={updateAnswer}
+            onChange={() => setUpdateAnswer((answer) => !answer)}
+          />
+        </div>
       </section>
 
       <p>Index: {currentCardIndex}</p>
