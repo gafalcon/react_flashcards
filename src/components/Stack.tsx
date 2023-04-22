@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { Card } from "../models/Card";
 import { answerCard } from "../services/api";
 import { getRandomInt } from "../utils/fns";
@@ -11,35 +11,38 @@ interface StackProps {
 
 type Action = "correct" | "incorrect" | "skip" | "show";
 
-export const Stack = ({ cards }: StackProps) => {
-  const [numReviews, setNumReviews] = useState<number>(5);
-  const [numCardsToReview, setNumCardsToReview] = useState<number>(
-    cards.length
-  );
+const DEFAULT_TIMES_TO_REVIEW = 5;
+const DEFAULT_NUM_CARDS_TO_REVIEW = 20;
 
+const getCardsToReview = (
+  incompleteCards: Card[],
+  numCardsToReview: number
+) => {
+  const numbers = Array(incompleteCards.length)
+    .fill(0)
+    .map((_, index) => index + 1);
+  numbers.sort(() => Math.random() - 0.5);
+  return numbers.slice(0, numCardsToReview).map((i) => incompleteCards[i]);
+};
+
+export const Stack = ({ cards }: StackProps) => {
+  const [incompleteCards, setIncompleteCards] = useState<Card[]>(
+    cards.filter((card) => card.correct_attempts < DEFAULT_TIMES_TO_REVIEW)
+  );
+  const [timesToReview, setTimesToReview] = useState<number>(
+    DEFAULT_TIMES_TO_REVIEW
+  );
+  const [numCardsToReview, setNumCardsToReview] = useState<number>(
+    Math.min(incompleteCards.length, DEFAULT_NUM_CARDS_TO_REVIEW)
+  );
+  const [cardsToReview, setCardsToReview] = useState<Card[]>(
+    getCardsToReview(incompleteCards, numCardsToReview)
+  );
   const [currentCardIndex, setCurrentCardIndex] = useState<number | null>(
-    cards.length ? getRandomInt(cards.length) : null
+    cardsToReview.length ? getRandomInt(numCardsToReview) : null
   );
   const [showAnswer, setShowAnswer] = useState(false);
   const [updateAnswer, setUpdateAnswer] = useState(false);
-
-  const getIncompleteCards = () =>
-    cards.filter((card) => card.correct_attempts < numReviews);
-
-  const getCardsToReview = (incompleteCards: Card[]) => {
-    const numbers = Array(incompleteCards.length)
-      .fill(0)
-      .map((_, index) => index + 1);
-    numbers.sort(() => Math.random() - 0.5);
-    return numbers.slice(0, numCardsToReview).map((i) => incompleteCards[i]);
-  };
-
-  const incompleteCards = useMemo(getIncompleteCards, [cards]);
-
-  const cardsToReview = useMemo(
-    () => getCardsToReview(incompleteCards),
-    [incompleteCards, numCardsToReview]
-  );
 
   const card =
     currentCardIndex === null ? null : cardsToReview[currentCardIndex];
@@ -48,19 +51,39 @@ export const Stack = ({ cards }: StackProps) => {
     e
   ) => {
     if (e.target.value) {
-      setNumCardsToReview(parseInt(e.target.value));
+      const numCards = parseInt(e.target.value);
+      setNumCardsToReview(numCards);
+      setCardsToReview(getCardsToReview(incompleteCards, numCards));
+      setShowAnswer(false);
       setCurrentCardIndex(0);
     } else {
       setNumCardsToReview(0);
+      setCardsToReview([]);
       setCurrentCardIndex(null);
     }
   };
 
-  const updateNumReviews: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+  const updateTimesToReview: React.ChangeEventHandler<HTMLInputElement> = (
+    e
+  ) => {
     if (e.target.value) {
-      setNumReviews(parseInt(e.target.value));
+      const times = parseInt(e.target.value);
+      setTimesToReview(times);
+      setIncompleteCards(cards.filter((card) => card.correct_attempts < times));
+
+      const newCardsToReview = cardsToReview.filter(
+        (card) => card.correct_attempts < times
+      );
+      if (newCardsToReview.length !== cardsToReview.length) {
+        setCardsToReview(newCardsToReview);
+        setCurrentCardIndex(
+          newCardsToReview.length ? getRandomInt(newCardsToReview.length) : null
+        );
+      }
     } else {
-      setNumReviews(0);
+      setTimesToReview(0);
+      setCardsToReview([]);
+      setIncompleteCards([]);
     }
   };
 
@@ -95,6 +118,11 @@ export const Stack = ({ cards }: StackProps) => {
       });
     }
   };
+
+  const showNewCard = () => {
+    setCurrentCardIndex(getRandomInt(cardsToReview.length));
+  };
+
   const handleAction = (action: Action) => {
     if (action !== "show") setShowAnswer(false);
 
@@ -103,23 +131,27 @@ export const Stack = ({ cards }: StackProps) => {
         setShowAnswer(!showAnswer);
         break;
       case "skip":
-        setCurrentCardIndex(getRandomInt(cardsToReview.length));
+        showNewCard();
         break;
       case "correct":
         const currentCard = cardsToReview[currentCardIndex!];
         currentCard.correct_attempts++;
         updateAnswerInDB(currentCard.id, true);
-        if (currentCard.correct_attempts === numReviews) {
-          setCurrentCardIndex(getRandomInt(cardsToReview.length - 1));
+        if (currentCard.correct_attempts === timesToReview) {
+          const newCardsToReview = cardsToReview.filter(
+            (card) => card.id !== currentCard.id
+          );
+          setCardsToReview(newCardsToReview);
+          setCurrentCardIndex(getRandomInt(newCardsToReview.length));
         } else {
-          setCurrentCardIndex(getRandomInt(cardsToReview.length));
+          showNewCard();
         }
         break;
       case "incorrect":
         const curCard = cardsToReview[currentCardIndex!];
         curCard.incorrect_attempts++;
         updateAnswerInDB(curCard.id, false);
-        setCurrentCardIndex(getRandomInt(cardsToReview.length));
+        showNewCard();
         break;
       default:
         break;
@@ -145,17 +177,17 @@ export const Stack = ({ cards }: StackProps) => {
           onChange={updateNumCardsToReview}
         />
         <label
-          htmlFor="numReviews"
+          htmlFor="timesToReview"
           className="flex justify-center items-center"
         >
           How many times to review each card?
         </label>
         <input
-          name="numReviews"
+          name="timesToReview"
           className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
           type="number"
-          value={numReviews}
-          onChange={updateNumReviews}
+          value={timesToReview}
+          onChange={updateTimesToReview}
         />
         <div>
           <label htmlFor="updateAnswers">Update answers in db</label>

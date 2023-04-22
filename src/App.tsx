@@ -14,7 +14,7 @@ function App() {
   }, []);
   return (
     <div className="container mx-auto h-screen">
-      <Stack cards={cards} />
+      {cards.length ? <Stack cards={cards} /> : <h1>Loading Cards....</h1>}
     </div>
   );
 }
