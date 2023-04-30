@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Card } from "../models/Card";
+import { Card, OneWayCard, toOneWay } from "../models/Card";
 import { answerCard } from "../services/api";
 import { getRandomInt } from "../utils/fns";
 import { useKeyDown } from "../utils/useKeyDown";
@@ -15,7 +15,7 @@ const DEFAULT_TIMES_TO_REVIEW = 5;
 const DEFAULT_NUM_CARDS_TO_REVIEW = 20;
 
 const getCardsToReview = (
-  incompleteCards: Card[],
+  incompleteCards: OneWayCard[],
   numCardsToReview: number
 ) => {
   const numbers = Array(incompleteCards.length)
@@ -25,9 +25,25 @@ const getCardsToReview = (
   return numbers.slice(0, numCardsToReview).map((i) => incompleteCards[i]);
 };
 
+const getIncompleteCards = (cards: Card[], timesToReview: number) => {
+  const incompleteCards: OneWayCard[] = [];
+  cards.forEach((card) => {
+    if (card.correct_attempts < timesToReview) {
+      incompleteCards.push(toOneWay(card, true));
+    }
+    if (card.two_way && (card.correct_attempts_two_way || 0) < timesToReview) {
+      incompleteCards.push(toOneWay(card, false));
+    }
+  });
+  return incompleteCards;
+};
+
 export const Stack = ({ cards }: StackProps) => {
-  const [incompleteCards, setIncompleteCards] = useState<Card[]>(
-    cards.filter((card) => card.correct_attempts < DEFAULT_TIMES_TO_REVIEW)
+  /* const [incompleteCards, setIncompleteCards] = useState<Card[]>(
+   *   cards.filter((card) => card.correct_attempts < DEFAULT_TIMES_TO_REVIEW)
+   * ); */
+  const [incompleteCards, setIncompleteCards] = useState<OneWayCard[]>(
+    getIncompleteCards(cards, DEFAULT_TIMES_TO_REVIEW)
   );
   const [timesToReview, setTimesToReview] = useState<number>(
     DEFAULT_TIMES_TO_REVIEW
@@ -35,14 +51,14 @@ export const Stack = ({ cards }: StackProps) => {
   const [numCardsToReview, setNumCardsToReview] = useState<number>(
     Math.min(incompleteCards.length, DEFAULT_NUM_CARDS_TO_REVIEW)
   );
-  const [cardsToReview, setCardsToReview] = useState<Card[]>(
+  const [cardsToReview, setCardsToReview] = useState<OneWayCard[]>(
     getCardsToReview(incompleteCards, numCardsToReview)
   );
   const [currentCardIndex, setCurrentCardIndex] = useState<number | null>(
-    cardsToReview.length ? getRandomInt(numCardsToReview) : null
+    cardsToReview.length ? getRandomInt(numCardsToReview, null) : null
   );
   const [showAnswer, setShowAnswer] = useState(false);
-  const [updateAnswer, setUpdateAnswer] = useState(false);
+  const [updateAnswer, setUpdateAnswer] = useState(true);
 
   const card =
     currentCardIndex === null ? null : cardsToReview[currentCardIndex];
@@ -69,7 +85,8 @@ export const Stack = ({ cards }: StackProps) => {
     if (e.target.value) {
       const times = parseInt(e.target.value);
       setTimesToReview(times);
-      setIncompleteCards(cards.filter((card) => card.correct_attempts < times));
+      /* setIncompleteCards(cards.filter((card) => card.correct_attempts < times)); */
+      setIncompleteCards(getIncompleteCards(cards, times));
 
       const newCardsToReview = cardsToReview.filter(
         (card) => card.correct_attempts < times
@@ -77,7 +94,9 @@ export const Stack = ({ cards }: StackProps) => {
       if (newCardsToReview.length !== cardsToReview.length) {
         setCardsToReview(newCardsToReview);
         setCurrentCardIndex(
-          newCardsToReview.length ? getRandomInt(newCardsToReview.length) : null
+          newCardsToReview.length
+            ? getRandomInt(newCardsToReview.length, currentCardIndex)
+            : null
         );
       }
     } else {
@@ -111,16 +130,20 @@ export const Stack = ({ cards }: StackProps) => {
     "ArrowRight",
   ]);
 
-  const updateAnswerInDB = (cardId: string, is_correct: boolean) => {
+  const updateAnswerInDB = (
+    cardId: string,
+    is_correct: boolean,
+    is_front: boolean
+  ) => {
     if (updateAnswer) {
-      answerCard(cardId, is_correct).then((res) => {
+      answerCard(cardId, is_correct, is_front).then((res) => {
         console.log({ resAnswer: res });
       });
     }
   };
 
   const showNewCard = () => {
-    setCurrentCardIndex(getRandomInt(cardsToReview.length));
+    setCurrentCardIndex(getRandomInt(cardsToReview.length, currentCardIndex));
   };
 
   const handleAction = (action: Action) => {
@@ -136,13 +159,15 @@ export const Stack = ({ cards }: StackProps) => {
       case "correct":
         const currentCard = cardsToReview[currentCardIndex!];
         currentCard.correct_attempts++;
-        updateAnswerInDB(currentCard.id, true);
+        updateAnswerInDB(currentCard.id, true, currentCard.isFront);
         if (currentCard.correct_attempts === timesToReview) {
           const newCardsToReview = cardsToReview.filter(
             (card) => card.id !== currentCard.id
           );
           setCardsToReview(newCardsToReview);
-          setCurrentCardIndex(getRandomInt(newCardsToReview.length));
+          setCurrentCardIndex(
+            getRandomInt(newCardsToReview.length, currentCardIndex)
+          );
         } else {
           showNewCard();
         }
@@ -150,7 +175,7 @@ export const Stack = ({ cards }: StackProps) => {
       case "incorrect":
         const curCard = cardsToReview[currentCardIndex!];
         curCard.incorrect_attempts++;
-        updateAnswerInDB(curCard.id, false);
+        updateAnswerInDB(curCard.id, false, curCard.isFront);
         showNewCard();
         break;
       default:
@@ -204,6 +229,10 @@ export const Stack = ({ cards }: StackProps) => {
       <p>Index: {currentCardIndex}</p>
       {card && (
         <div className="mt-20 flex flex-col items-center">
+          <p>
+            Group: {card.group} - {card.isFront ? "Front" : "Back"}
+            {true}
+          </p>
           <div className="text-4xl py-20 rounded overflow-hidden shadow-lg w-4/5 my-10 h-80 flex items-center justify-center">
             {showAnswer ? card.answer : card.question}
           </div>
