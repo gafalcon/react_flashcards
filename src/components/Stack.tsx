@@ -85,7 +85,6 @@ export const Stack = ({ cards }: StackProps) => {
     if (e.target.value) {
       const times = parseInt(e.target.value);
       setTimesToReview(times);
-      /* setIncompleteCards(cards.filter((card) => card.correct_attempts < times)); */
       setIncompleteCards(getIncompleteCards(cards, times));
 
       const newCardsToReview = cardsToReview.filter(
@@ -162,7 +161,8 @@ export const Stack = ({ cards }: StackProps) => {
         updateAnswerInDB(currentCard.id, true, currentCard.isFront);
         if (currentCard.correct_attempts === timesToReview) {
           const newCardsToReview = cardsToReview.filter(
-            (card) => card.id !== currentCard.id
+            (card) =>
+              card.id !== currentCard.id || card.isFront !== currentCard.isFront
           );
           setCardsToReview(newCardsToReview);
           setCurrentCardIndex(

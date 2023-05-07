@@ -16,7 +16,7 @@ export const answerCard = async (
 ) => {
   const res = await fetch(`${API_URL}/flashcards/${cardId}/answer`, {
     method: "PATCH",
-    body: JSON.stringify({ is_correct: isCorrect, two_way: is_front }),
+    body: JSON.stringify({ is_correct: isCorrect, two_way: !is_front }),
   });
   const data = await res.json();
   return data;
